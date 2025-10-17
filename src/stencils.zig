@@ -13,15 +13,17 @@ pub const Context = struct {
 };
 
 /// Push a constant onto the stack
-/// The constant 0x4242424242424242 is a MAGIC VALUE we will PATCH
-export fn push_const_stencil(ctx: *Context) callconv(.C) void {
-    const value: i64 = 0x4242424242424242; // Patch Point
+pub fn push_const_stencil(ctx: *Context) void {
+    @setRuntimeSafety(false);
+    const value:i64 = 0x1111_1111_1111_1111;
     ctx.stack[ctx.sp] = value;
     ctx.sp += 1;
 }
 
 /// Add: pop 2 values, push sum
-export fn add_stencil(ctx: *Context) callconv(.C) void {
+pub fn add_stencil(ctx: *Context) callconv(.c) void {
+    @setRuntimeSafety(false);
+    
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -31,7 +33,7 @@ export fn add_stencil(ctx: *Context) callconv(.C) void {
 }
 
 /// Subtract: pop 2 values, push difference (a - b)
-export fn sub_stencil(ctx: *Context) callconv(.C) void {
+pub fn sub_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -41,7 +43,7 @@ export fn sub_stencil(ctx: *Context) callconv(.C) void {
 }
 
 /// Multiply: pop 2 values, push product
-export fn mul_stencil(ctx: *Context) callconv(.C) void {
+pub fn mul_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -51,7 +53,7 @@ export fn mul_stencil(ctx: *Context) callconv(.C) void {
 }
 
 /// Divide: pop 2 values, push quotient (a / b)
-export fn div_stencil(ctx: *Context) callconv(.C) void {
+pub fn div_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -65,7 +67,7 @@ export fn div_stencil(ctx: *Context) callconv(.C) void {
 }
 
 /// Negate: pop 1 value, push negation
-export fn neg_stencil(ctx: *Context) callconv(.C) void {
+pub fn neg_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const a = ctx.stack[ctx.sp];
     ctx.stack[ctx.sp] = -a;
@@ -74,7 +76,7 @@ export fn neg_stencil(ctx: *Context) callconv(.C) void {
 
 /// Pop top of stack and return it
 /// This is the ONLY stencil that returns a value!
-export fn pop_return_stencil(ctx: *Context) callconv(.C) i64 {
+pub fn pop_return_stencil(ctx: *Context) callconv(.c) i64 {
     ctx.sp -= 1;
     return ctx.stack[ctx.sp];
 }

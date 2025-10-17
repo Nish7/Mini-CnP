@@ -84,9 +84,7 @@ pub const CnPCompiler = struct {
         const dest = self.executor.memory[self.current_offset..];
 
         // COPY the stencil (without RET)
-        var size = stencil.size;
-        size = self.removeRetInstruction(stencil.code, size);
-
+        const size = stencil.size;
         @memcpy(dest[0..size], stencil.code[0..size]);
 
         // PATCH the magic constant
