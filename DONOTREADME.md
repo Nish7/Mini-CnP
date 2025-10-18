@@ -1,5 +1,4 @@
 # DONOTREADME
-Rough Notes
 
 ## Research Notes:
 - Takes Reverse Polish Notation as input for evaluation interpretation (Simplicity sakes)
@@ -155,3 +154,5 @@ Expected Issues:
   
 Tools:
 https://ret.futo.org/arm64/ -> Disassemebly Tool
+- https://courses.cs.washington.edu/courses/cse469/19wi/arm64.pdf
+- https://blog.reverberate.org/2025/02/10/tail-call-updates.html

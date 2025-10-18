@@ -13,7 +13,7 @@ pub const Context = struct {
 };
 
 /// Push a constant onto the stack
-pub fn push_const_stencil(ctx: *Context) void {
+pub export fn push_const_stencil(ctx: *Context) void {
     @setRuntimeSafety(false);
     const value:i64 = 0x1111_1111_1111_1111;
     ctx.stack[ctx.sp] = value;
@@ -21,7 +21,7 @@ pub fn push_const_stencil(ctx: *Context) void {
 }
 
 /// Add: pop 2 values, push sum
-pub fn add_stencil(ctx: *Context) callconv(.c) void {
+pub export fn add_stencil(ctx: *Context) callconv(.c) void {
     @setRuntimeSafety(false);
     
     ctx.sp -= 1;
@@ -33,7 +33,7 @@ pub fn add_stencil(ctx: *Context) callconv(.c) void {
 }
 
 /// Subtract: pop 2 values, push difference (a - b)
-pub fn sub_stencil(ctx: *Context) callconv(.c) void {
+pub export fn sub_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -43,7 +43,7 @@ pub fn sub_stencil(ctx: *Context) callconv(.c) void {
 }
 
 /// Multiply: pop 2 values, push product
-pub fn mul_stencil(ctx: *Context) callconv(.c) void {
+pub export fn mul_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -53,7 +53,7 @@ pub fn mul_stencil(ctx: *Context) callconv(.c) void {
 }
 
 /// Divide: pop 2 values, push quotient (a / b)
-pub fn div_stencil(ctx: *Context) callconv(.c) void {
+pub export fn div_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;
@@ -67,7 +67,7 @@ pub fn div_stencil(ctx: *Context) callconv(.c) void {
 }
 
 /// Negate: pop 1 value, push negation
-pub fn neg_stencil(ctx: *Context) callconv(.c) void {
+pub export fn neg_stencil(ctx: *Context) callconv(.c) void {
     ctx.sp -= 1;
     const a = ctx.stack[ctx.sp];
     ctx.stack[ctx.sp] = -a;
@@ -76,7 +76,7 @@ pub fn neg_stencil(ctx: *Context) callconv(.c) void {
 
 /// Pop top of stack and return it
 /// This is the ONLY stencil that returns a value!
-pub fn pop_return_stencil(ctx: *Context) callconv(.c) i64 {
+pub export fn pop_return_stencil(ctx: *Context) callconv(.c) i64 {
     ctx.sp -= 1;
     return ctx.stack[ctx.sp];
 }
