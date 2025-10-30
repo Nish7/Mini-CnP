@@ -139,6 +139,22 @@ Relocations:
 - https://intezer.com/blog/executable-and-linkable-format-101-part-3-relocations/
 - https://blog.cloudflare.com/how-to-execute-an-object-file-part-4/?utm_source=chatgpt.com/
 
+One of the questions i had: 
+- if we do "abuse" relocation how do we patch them up
+- if we mark them with external symbols we produce `ardp+ldr` sequences
+- we can at JIT time, patch them up with we do have 8 byte in hand to patch them up with
+- however, issue: we might have to write `movz/movk` sequences to the handle i64 integers
+- also there remains a quesitosn regarding how do we deal with the variety of address sizes.
+- also do we patch them by inlining or add them to the address of the relocation and let the sequences handle them accrodingly?
+
+Maybe gpt is up to somehting?
+
+"Emit an LDR (literal) or ADRP+LDR that reads a 64-bit pointer from a fixed 8-byte slot placed next to (or within reachable PC range of) the stencil. At JIT patch time write the 8-byte pointer into that slot. This means your instruction bytes never change, only the 8 bytes in the literal slot do. Works on AArch64 and x86_64 (x86: use a RIP-relative load from a literal or movabs target in a literal). Minimal patch size (8 bytes), simple atomic write, robust for all pointer sizes. "
+
+is the blog they are using CPS style fn output which basically calls the next function in CPS manner, what i fail to underdsand is why do this, why no simply hadnle this by stripping the epilogue and add the bytes consectively?
+
+concateive approahc vs functinal coposition
+
 Expected Issues:
 - Pass stack pointer using `context` within a single register. 
     - solves the ctx passing between stencils.
@@ -149,9 +165,39 @@ Expected Issues:
   - look at the zig relocation table and relocatblae symbol
   - attaching a label? in zig?
   - Symbolic Patch Points using 
-  
 
+# Fibonnaci ASM    
+This is my thinking process regarding the how can i make this work for the Fibonnaci
+however, it seems to ambitious given it would require either custom calling convention and ability to call a subroutine, along with some support of label
+branch support as well. Which quickly become a full fledge turing language, we dont want that for this mini cnp.
+
+0 1 2 3 
+1,1,2,3
+
+fib(3) -> fib(1) + fib(2) = 3
+  fib(2) -> fib(1) + fib(0) = 2
+    fib(1) and fib(0)
+    
+```
+def fib(n):
+  if (n < 2):
+    return 1
   
+  return fib(n - 2) +  fib(n - 1)
+```
+- registers:
+1. r0 -> return register
+2. r1 -> temp register
+3. r2 -> temp register
+
+load r1 n               # load n into register 0
+load r1                 # load n into register 0
+jump_if_less_two X      # jump to 
+ 
+load r0 1
+load r0
+ret
+
 Tools:
 https://ret.futo.org/arm64/ -> Disassemebly Tool
 - https://courses.cs.washington.edu/courses/cse469/19wi/arm64.pdf

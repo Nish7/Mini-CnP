@@ -79,12 +79,10 @@ pub const Expression = struct {
                 .sub => std.debug.print("- ", .{}),
                 .mul => std.debug.print("* ", .{}),
                 .div => std.debug.print("/ ", .{}),
-                .neg => std.debug.print("neg ", .{}),
             }
         }
         std.debug.print("\n", .{});
     }
-    
 };
 
 // Tests
@@ -92,7 +90,6 @@ pub const Expression = struct {
 test "parse simple RPN expression" {
     const expr = try Expression.parse(std.testing.allocator, "2 3 +");
     defer expr.deinit();
-    
     try std.testing.expectEqual(@as(usize, 3), expr.operations.len);
     try std.testing.expectEqual(OpType.load_const, expr.operations[0].op_type);
     try std.testing.expectEqual(@as(i64, 2), expr.operations[0].value.?);

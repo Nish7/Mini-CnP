@@ -1,10 +1,10 @@
 const std = @import("std");
-const stack_stencils = @import("stack_stencils.zig");
+const stencils = @import("stencils.zig");
 const extractor = @import("extractor.zig");
 const executor = @import("executor.zig");
 const expression = @import("expression.zig");
 
-const Context = stack_stencils.Context;
+const Context = stencils.Context;
 const Stencil = extractor.Stencil;
 const Executor = executor.Executor;
 const Expression = expression.Expression;
@@ -87,92 +87,44 @@ pub const CnPCompiler = struct {
         const size = stencil.size;
         @memcpy(dest[0..size], stencil.code[0..size]);
 
-        // PATCH the magic constant
-        try self.patchMagicConstant(self.current_offset, size, value);
+        try stencils.hole_slot
         std.debug.print("Copied {} bytes, patched constant\n", .{size});
 
         self.current_offset += size;
     }
 
-    /// Emit an operation stencil (add, sub, mul, div, neg)
     fn emitOperation(self: *CnPCompiler, name: []const u8) !void {
         const stencil = try self.stencil_cache.get(name);
         const dest = self.executor.memory[self.current_offset..];
-
-        // COPY the stencil (without RET so it chains)
         var size = stencil.size;
         size = self.removeRetInstruction(stencil.code, size);
-
         @memcpy(dest[0..size], stencil.code[0..size]);
         std.debug.print("Copied {} bytes (RET removed for chaining)\n", .{size});
-
         self.current_offset += size;
     }
 
-    /// Emit the final return stencil (keeps RET)
     fn emitReturn(self: *CnPCompiler) !void {
         const stencil = try self.stencil_cache.get("pop_return");
         const dest = self.executor.memory[self.current_offset..];
-
-        // COPY with RET intact - this ends the chain
         @memcpy(dest[0..stencil.size], stencil.code[0..stencil.size]);
         std.debug.print("  → Copied {} bytes (RET kept - ends chain)\n", .{stencil.size});
-
         self.current_offset += stencil.size;
     }
 
-    /// Remove RET instruction from code to enable chaining
-    fn removeRetInstruction(self: *CnPCompiler, code: []const u8, size: usize) usize {
-        _ = self;
-        const arch = @import("builtin").cpu.arch;
-
-        if (arch == .x86_64) {
-            // Look for 'ret' (0xC3) at the end
-            if (size > 0 and code[size - 1] == 0xC3) {
-                return size - 1;
-            }
-            // Look for 'ret imm16' (0xC2)
-            if (size > 2 and code[size - 3] == 0xC2) {
-                return size - 3;
-            }
-        } else if (arch == .aarch64) {
-            // ARM64 'ret' is 4 bytes: D6 5F 03 C0
-            if (size >= 4 and
-                code[size - 4] == 0xD6 and
-                code[size - 3] == 0x5F and
-                code[size - 2] == 0x03 and
-                code[size - 1] == 0xC0)
-            {
-                return size - 4;
-            }
+    fn removeRetInstruction(_: *CnPCompiler, code: []const u8, size: usize) usize {
+        if (size >= 4 and
+            code[size - 4] == 0xD6 and
+            code[size - 3] == 0x5F and
+            code[size - 2] == 0x03 and
+            code[size - 1] == 0xC0)
+        {
+            return size - 4;
         }
 
-        return size; // Couldn't find RET, return original size
-    }
-
-    /// PATCH a magic constant value in the copied stencil
-    fn patchMagicConstant(self: *CnPCompiler, offset: usize, size: usize, value: i64) !void {
-        const code = self.executor.memory[offset..][0..size];
-        const magic: i64 = 0x4242424242424242;
-
-        var i: usize = 0;
-        while (i + 8 <= size) : (i += 1) {
-            if (i + 7 < size) {
-                const ptr: *align(1) const i64 = @ptrCast(&code[i]);
-                if (ptr.* == magic) {
-                    const patch_ptr: *align(1) i64 = @ptrCast(&code[i]);
-                    patch_ptr.* = value;
-                    return;
-                }
-            }
-        }
-
-        std.debug.print("Could not find magic value to patch\n", .{});
-        return error.MagicValueNotFound;
+        return size;
     }
 };
 
-/// Cache for extracted stencils
 const StencilCache = struct {
     stencils: std.StringHashMap(Stencil),
     allocator: std.mem.Allocator,
@@ -183,7 +135,6 @@ const StencilCache = struct {
             .allocator = allocator,
         };
 
-        // Extract all stencils from our template functions
         try cache.extractAll();
 
         return cache;
@@ -195,13 +146,13 @@ const StencilCache = struct {
 
     fn extractAll(self: *StencilCache) !void {
         // Extract each stencil from the compiled template functions
-        try self.extract("push_const", @ptrCast(&stack_stencils.push_const_stencil));
-        try self.extract("add", @ptrCast(&stack_stencils.add_stencil));
-        try self.extract("sub", @ptrCast(&stack_stencils.sub_stencil));
-        try self.extract("mul", @ptrCast(&stack_stencils.mul_stencil));
-        try self.extract("div", @ptrCast(&stack_stencils.div_stencil));
-        try self.extract("neg", @ptrCast(&stack_stencils.neg_stencil));
-        try self.extract("pop_return", @ptrCast(&stack_stencils.pop_return_stencil));
+        try self.extract("push_const", @ptrCast(&stencils.push_const_stencil));
+        try self.extract("add", @ptrCast(&stencils.add_stencil));
+        try self.extract("sub", @ptrCast(&stencils.sub_stencil));
+        try self.extract("mul", @ptrCast(&stencils.mul_stencil));
+        try self.extract("div", @ptrCast(&stencils.div_stencil));
+        try self.extract("neg", @ptrCast(&stencils.neg_stencil));
+        try self.extract("pop_return", @ptrCast(&stencils.pop_return_stencil));
     }
 
     fn extract(self: *StencilCache, name: []const u8, func_ptr: *const anyopaque) !void {

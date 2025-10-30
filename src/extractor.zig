@@ -1,25 +1,10 @@
 const std = @import("std");
 const stencils = @import("stencils.zig");
 
-pub const PatchPoint = struct {
-    offset: usize,
-    size: u8,
-    kind: PatchKind,
-    
-    pub const PatchKind = enum {
-        immediate,
-        address,
-        branch_offset,
-    };
-};
-
-/// Stencil represents extracted machine code from a compiled function
 pub const Stencil = struct {
     name: []const u8,
     code: []const u8,
     size: usize,
-    // patch_points: []PatchPoint,
-    // allocator: std.mem.Allocator,
 
     pub fn print(self: Stencil) void {
         std.debug.print("Stencil '{s}' ({} bytes): ", .{ self.name, self.size });
@@ -40,18 +25,10 @@ pub fn extractStencil(name: []const u8, func_ptr: *const anyopaque, max_size: us
         const is_final = std.mem.eql(u8, name, "pop_return");
         const body = stripStencilFrame(full_code, is_final);
         
-        // Analyze the body for patch points
-        // const patch_points = try analyzeARM64PatchPoints(name, body, allocator);
-        
-        // std.debug.print("Extracted '{s}': {d} -> {d} bytes (stripped)\n", 
-            // .{name, full_size, body.len});
-        
         return Stencil{
             .name = name,
             .code = body.ptr[0..body.len],
             .size = body.len,
-            // .patch_points = patch_points,
-            // .allocator = allocator,
         };
 }
 
@@ -61,7 +38,6 @@ pub fn extractStencil(name: []const u8, func_ptr: *const anyopaque, max_size: us
 fn findARM64FunctionSize(code_ptr: [*]const u8, max_size: usize) usize {
     var size: usize = 0;
 
-    // ARM64 instructions are 4 bytes, aligned
     while (size + 4 <= max_size) : (size += 4) {
         // Check for 'ret' instruction: D65F03C0
         if (code_ptr[size] == 0xC0 and
@@ -76,7 +52,6 @@ fn findARM64FunctionSize(code_ptr: [*]const u8, max_size: usize) usize {
     return max_size;
 }
 
-/// Copy stencil code to destination buffer
 pub fn copyStencil(dest: []u8, stencil: Stencil) !usize {
     if (dest.len < stencil.size) {
         return error.BufferTooSmall;
