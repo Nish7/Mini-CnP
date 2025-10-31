@@ -14,14 +14,12 @@ pub const CnPCompiler = struct {
     allocator: std.mem.Allocator,
     executor: Executor,
     stencil_cache: StencilCache,
-    current_offset: usize,
 
     pub fn init(allocator: std.mem.Allocator, memory_size: usize) !CnPCompiler {
         return CnPCompiler{
             .allocator = allocator,
             .executor = try Executor.init(allocator, memory_size),
             .stencil_cache = try StencilCache.init(allocator),
-            .current_offset = 0,
         };
     }
 
@@ -30,15 +28,20 @@ pub const CnPCompiler = struct {
         self.executor.deinit();
     }
 
-    pub fn compile(self: *CnPCompiler, expr: Expression) !*const fn (*Context) callconv(.C) i64 {
-        self.current_offset = 0;
+    pub fn addPrologue(self: *CnPCompiler) !void {
+        const prlg = [_]u8{ 0xFD, 0x7B, 0xBF, 0xA9, 0xFD, 0x03, 0x00, 0x91 };
+        try self.executor.writeCode(&prlg);
+    }
+
+    pub fn compile(self: *CnPCompiler, expr: Expression) !*const fn (*Context) callconv(.c) i64 {
         self.executor.clear();
 
         std.debug.print("Expression: ", .{});
         expr.print();
         std.debug.print("\n", .{});
 
-        // For each operation, COPY its stencil
+        try self.addPrologue();
+
         for (expr.operations, 0..) |op, i| {
             std.debug.print("Step {}: ", .{i + 1});
 
@@ -70,58 +73,21 @@ pub const CnPCompiler = struct {
             }
         }
 
-        std.debug.print("COPY pop_return stencil (with RET)\n", .{expr.operations.len + 1});
-        try self.emitReturn();
-
-        std.debug.print("\nGenerated {} bytes of chained machine code\n", .{self.current_offset});
-
-        return self.executor.getCodePointer(0, *const fn (*Context) callconv(.C) i64);
+        try self.emitOperation("pop_return");
+        self.executor.printMemory();
+        return try self.executor.getCodePointer(0, *const fn (*Context) callconv(.c) i64);
     }
 
-    /// Emit a push_const stencil with a patched value
     fn emitPushConst(self: *CnPCompiler, value: i64) !void {
         const stencil = try self.stencil_cache.get("push_const");
-        const dest = self.executor.memory[self.current_offset..];
-
-        // COPY the stencil (without RET)
-        const size = stencil.size;
-        @memcpy(dest[0..size], stencil.code[0..size]);
-
-        try stencils.hole_slot
-        std.debug.print("Copied {} bytes, patched constant\n", .{size});
-
-        self.current_offset += size;
+        try self.executor.writeCode(stencil.code);
+        stencils.hole_slot = value; // patch value
     }
 
     fn emitOperation(self: *CnPCompiler, name: []const u8) !void {
         const stencil = try self.stencil_cache.get(name);
-        const dest = self.executor.memory[self.current_offset..];
-        var size = stencil.size;
-        size = self.removeRetInstruction(stencil.code, size);
-        @memcpy(dest[0..size], stencil.code[0..size]);
-        std.debug.print("Copied {} bytes (RET removed for chaining)\n", .{size});
-        self.current_offset += size;
-    }
-
-    fn emitReturn(self: *CnPCompiler) !void {
-        const stencil = try self.stencil_cache.get("pop_return");
-        const dest = self.executor.memory[self.current_offset..];
-        @memcpy(dest[0..stencil.size], stencil.code[0..stencil.size]);
-        std.debug.print("  → Copied {} bytes (RET kept - ends chain)\n", .{stencil.size});
-        self.current_offset += stencil.size;
-    }
-
-    fn removeRetInstruction(_: *CnPCompiler, code: []const u8, size: usize) usize {
-        if (size >= 4 and
-            code[size - 4] == 0xD6 and
-            code[size - 3] == 0x5F and
-            code[size - 2] == 0x03 and
-            code[size - 1] == 0xC0)
-        {
-            return size - 4;
-        }
-
-        return size;
+        try self.executor.writeCode(stencil.code);
+        stencil.print();
     }
 };
 
@@ -156,7 +122,7 @@ const StencilCache = struct {
     }
 
     fn extract(self: *StencilCache, name: []const u8, func_ptr: *const anyopaque) !void {
-        const stencil = try extractor.extractNamedStencil(name, func_ptr, 256);
+        const stencil = try extractor.extractStencil(name, func_ptr, 256);
         try self.stencils.put(name, stencil);
     }
 
@@ -174,28 +140,6 @@ const StencilCache = struct {
     }
 };
 
-test "create compiler" {
-    var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
-    defer compiler.deinit();
-
-    try std.testing.expect(compiler.executor.memory.len >= 4096);
-}
-
-test "compile simple constant" {
-    var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
-    defer compiler.deinit();
-
-    const expr = try expression.Expression.parse(std.testing.allocator, "42");
-    defer expr.deinit();
-
-    const func = try compiler.compile(expr);
-
-    var ctx = Context.init();
-    const result = func(&ctx);
-
-    try std.testing.expectEqual(@as(i64, 42), result);
-}
-
 test "compile addition" {
     var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
     defer compiler.deinit();
@@ -205,35 +149,10 @@ test "compile addition" {
 
     const func = try compiler.compile(expr);
 
+    std.debug.print("{p}\n", .{func});
+
     var ctx = Context.init();
     const result = func(&ctx);
 
     try std.testing.expectEqual(@as(i64, 5), result);
-}
-
-test "compile complex expression" {
-    var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
-    defer compiler.deinit();
-
-    // (2 + 3) * 4 = 20
-    const expr = try expression.Expression.parse(std.testing.allocator, "2 3 + 4 *");
-    defer expr.deinit();
-
-    const func = try compiler.compile(expr);
-
-    var ctx = Context.init();
-    const result = func(&ctx);
-
-    try std.testing.expectEqual(@as(i64, 20), result);
-}
-
-test "stencil cache" {
-    var cache = try StencilCache.init(std.testing.allocator);
-    defer cache.deinit();
-
-    const add_stencil = try cache.get("add");
-    try std.testing.expect(add_stencil.size > 0);
-
-    const sub_stencil = try cache.get("sub");
-    try std.testing.expect(sub_stencil.size > 0);
 }

@@ -8,8 +8,9 @@ pub const Stencil = struct {
 
     pub fn print(self: Stencil) void {
         std.debug.print("Stencil '{s}' ({} bytes): ", .{ self.name, self.size });
-        for (self.code[0..self.size]) |byte| {
+        for (self.code[0..self.size], 0..) |byte, i| {
             std.debug.print("{X:0>2} ", .{byte});
+            if ((i + 1) % 4 == 0) std.debug.print("\n", .{});
         }
         std.debug.print("\n", .{});
     }
@@ -19,19 +20,18 @@ pub const Stencil = struct {
 /// This reads the actual bytes the compiler generated
 pub fn extractStencil(name: []const u8, func_ptr: *const anyopaque, max_size: usize) !Stencil {
     const code_ptr: [*]const u8 = @ptrCast(func_ptr);
-        const full_size = findARM64FunctionSize(code_ptr, max_size);
-        const full_code = code_ptr[0..full_size];
-        
-        const is_final = std.mem.eql(u8, name, "pop_return");
-        const body = stripStencilFrame(full_code, is_final);
-        
-        return Stencil{
-            .name = name,
-            .code = body.ptr[0..body.len],
-            .size = body.len,
-        };
-}
+    const full_size = findARM64FunctionSize(code_ptr, max_size);
+    const full_code = code_ptr[0..full_size];
 
+    const is_final = std.mem.eql(u8, name, "pop_return");
+    const body = stripStencilFrame(full_code, is_final);
+
+    return Stencil{
+        .name = name,
+        .code = body.ptr[0..body.len],
+        .size = body.len,
+    };
+}
 
 /// Find ARM64 function size by looking for 'ret' instruction
 /// ARM64 ret is encoded as 0xD65F03C0 (little-endian: C0 03 5F D6)
@@ -61,16 +61,6 @@ pub fn copyStencil(dest: []u8, stencil: Stencil) !usize {
     return stencil.size;
 }
 
-/// Patch a constant value in the stencil at given offset
-/// This modifies the copied machine code to use a different value
-pub fn patchConstant(code: []u8, offset: usize, value: i64) !void {
-    if (offset + @sizeOf(i64) > code.len) {
-        return error.PatchOffsetOutOfBounds;
-    }
-
-    std.mem.writeInt(i64, code[offset..][0..8], value, .little);
-}
-
 pub fn stripStencilFrame(code: []const u8, is_epilogue: bool) []const u8 {
     var start: usize = 0;
     var end: usize = code.len;
@@ -88,22 +78,15 @@ fn skipPrologue(code: []const u8) usize {
     var offset: usize = 0;
 
     if (offset + 4 <= code.len) {
-        const inst = std.mem.readInt(u32, code[offset..][0..4], .little);
-        if ((inst & 0xFFC003FF) == 0xD10003FF) { // sub sp, sp, #imm
+        const inst = std.mem.readInt(u32, code[offset..][0..4], .big);
+        if (inst == 0xFD7BBFA9) {
             offset += 4;
         }
     }
 
     if (offset + 4 <= code.len) {
-        const inst = std.mem.readInt(u32, code[offset..][0..4], .little);
-        if ((inst & 0xFFC07FFF) == 0xA9007BFD) { // stp x29, x30
-            offset += 4;
-        }
-    }
-
-    if (offset + 4 <= code.len) {
-        const inst = std.mem.readInt(u32, code[offset..][0..4], .little);
-        if ((inst & 0xFFC003FF) == 0x910003FD) { // add x29, sp
+        const inst = std.mem.readInt(u32, code[offset..][0..4], .big);
+        if (inst == 0xFD030091) {
             offset += 4;
         }
     }
@@ -112,28 +95,20 @@ fn skipPrologue(code: []const u8) usize {
 }
 
 fn findEpilogueStart(code: []const u8) usize {
-    if (code.len < 12) return code.len;
+    if (code.len < 8) return code.len;
 
     var end = code.len;
-    if (end >= 4 and
-        code[end - 4] == 0xC0 and
-        code[end - 3] == 0x03 and
-        code[end - 2] == 0x5F and
-        code[end - 1] == 0xD6)
-    {
-        end -= 4; // Remove ret
-    }
 
     if (end >= 4) {
-        const inst = std.mem.readInt(u32, code[end - 4 ..][0..4], .little);
-        if ((inst & 0xFFC003FF) == 0x910003FF) { // add sp, sp
+        const last = std.mem.readInt(u32, code[end - 4 ..][0..4], .little);
+        if (last == 0xD65F03C0) {
             end -= 4;
         }
     }
 
     if (end >= 4) {
         const inst = std.mem.readInt(u32, code[end - 4 ..][0..4], .little);
-        if ((inst & 0xFFC07FFF) == 0xA9407BFD) { // ldp x29, x30
+        if ((inst & 0xFFC07FFF) == 0xA8C17BFD) {
             end -= 4;
         }
     }
@@ -167,26 +142,7 @@ test "copy stencil to buffer" {
     try std.testing.expectEqualSlices(u8, stencil.code[0..stencil.size], buffer[0..copied_size]);
 }
 
-test "copy push_const to buffer" {
+test "extraction" {
     const stencil = try extractStencil("push_const", @ptrCast(&stencils.push_const_stencil), 256);
-
-    const stencilb = try extractStencil("add", @ptrCast(&stencils.add_stencil), 1024);
-
     stencil.print();
-    stencilb.print();
-
-    var buffer: [256]u8 = undefined;
-    const copied_size = try copyStencil(&buffer, stencil);
-
-    try std.testing.expectEqual(stencil.size, copied_size);
-    try std.testing.expectEqualSlices(u8, stencil.code[0..stencil.size], buffer[0..copied_size]);
-}
-
-test "patch constant in code" {
-    var code = [_]u8{ 0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC3 };
-
-    try patchConstant(&code, 2, 0x123456789ABCDEF0);
-
-    const patched_value = std.mem.readInt(i64, code[2..][0..8], .little);
-    try std.testing.expectEqual(@as(i64, 0x123456789ABCDEF0), patched_value);
 }

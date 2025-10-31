@@ -1,12 +1,12 @@
 const std = @import("std");
 
 pub const OpType = enum {
+    neg,
     add,
     sub,
     mul,
     div,
     load_const,
-    neg,
 };
 
 /// A single operation in an expression
@@ -79,6 +79,7 @@ pub const Expression = struct {
                 .sub => std.debug.print("- ", .{}),
                 .mul => std.debug.print("* ", .{}),
                 .div => std.debug.print("/ ", .{}),
+                .neg => std.debug.print("(-) ", .{}),
             }
         }
         std.debug.print("\n", .{});

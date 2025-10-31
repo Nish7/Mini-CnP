@@ -14,7 +14,7 @@ pub const Context = struct {
 
 pub export var hole_slot: i64 = 0;
 
-pub export fn push_const_stencil(ctx: *Context) void {
+pub export fn push_const_stencil(ctx: *Context) callconv(.c) void {
     @setRuntimeSafety(false);
     const ptr = &hole_slot;
     const value: i64 = ptr.*;
