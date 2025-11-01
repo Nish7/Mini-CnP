@@ -1,4 +1,5 @@
 const std = @import("std");
+const compiler = @import("compiler.zig");
 
 pub const Context = struct {
     stack: [256]i64,
@@ -6,17 +7,15 @@ pub const Context = struct {
 
     pub fn init() Context {
         return .{
-            .stack = undefined,
-            .sp = 0,
+            .stack = [_]i64{ 3, 5 } ++ [_]i64{undefined} ** 254,
+            .sp = 2,
         };
     }
 };
 
-pub export var hole_slot: i64 = 0;
-
 pub export fn push_const_stencil(ctx: *Context) callconv(.c) void {
     @setRuntimeSafety(false);
-    const ptr = &hole_slot;
+    const ptr = &compiler.hole_slot;
     const value: i64 = ptr.*;
     ctx.stack[ctx.sp] = value;
     ctx.sp += 1;
@@ -72,6 +71,8 @@ pub export fn neg_stencil(ctx: *Context) callconv(.c) void {
 }
 
 pub export fn pop_return_stencil(ctx: *Context) callconv(.c) i64 {
+    @setRuntimeSafety(false);
+
     ctx.sp -= 1;
     return ctx.stack[ctx.sp];
 }

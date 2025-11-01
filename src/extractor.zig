@@ -69,6 +69,7 @@ pub fn stripStencilFrame(code: []const u8, is_epilogue: bool) []const u8 {
 
     if (!is_epilogue) {
         end = findEpilogueStart(code);
+        if (end == 0) end = code.len;
     }
 
     return code[start..end];
@@ -100,15 +101,15 @@ fn findEpilogueStart(code: []const u8) usize {
     var end = code.len;
 
     if (end >= 4) {
-        const last = std.mem.readInt(u32, code[end - 4 ..][0..4], .little);
-        if (last == 0xD65F03C0) {
+        const last = std.mem.readInt(u32, code[end - 4 ..][0..4], .big);
+        if (last == 0xC0035FD6) {
             end -= 4;
         }
     }
 
     if (end >= 4) {
-        const inst = std.mem.readInt(u32, code[end - 4 ..][0..4], .little);
-        if ((inst & 0xFFC07FFF) == 0xA8C17BFD) {
+        const last = std.mem.readInt(u32, code[end - 4 ..][0..4], .big);
+        if (last == 0xFD7BC1A8) {
             end -= 4;
         }
     }

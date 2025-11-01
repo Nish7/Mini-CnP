@@ -46,7 +46,8 @@ pub const Executor = struct {
     }
 
     pub fn clear(self: *Executor) void {
-        @memset(self.memory, 0);
+        @memset(self.memory[0..self.memory.len], 0);
+        self.current_offset = 0;
     }
 };
 

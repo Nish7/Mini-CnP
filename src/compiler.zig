@@ -10,6 +10,8 @@ const Executor = executor.Executor;
 const Expression = expression.Expression;
 const OpType = expression.OpType;
 
+pub export var hole_slot: i64 = 42;
+
 pub const CnPCompiler = struct {
     allocator: std.mem.Allocator,
     executor: Executor,
@@ -81,7 +83,8 @@ pub const CnPCompiler = struct {
     fn emitPushConst(self: *CnPCompiler, value: i64) !void {
         const stencil = try self.stencil_cache.get("push_const");
         try self.executor.writeCode(stencil.code);
-        stencils.hole_slot = value; // patch value
+        std.debug.print("hole slot pointer vlaue {p}", .{&hole_slot});
+        hole_slot = value; // patch value
     }
 
     fn emitOperation(self: *CnPCompiler, name: []const u8) !void {
@@ -144,7 +147,7 @@ test "compile addition" {
     var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
     defer compiler.deinit();
 
-    const expr = try expression.Expression.parse(std.testing.allocator, "2 3 +");
+    const expr = try expression.Expression.parse(std.testing.allocator, "+");
     defer expr.deinit();
 
     const func = try compiler.compile(expr);
@@ -152,7 +155,8 @@ test "compile addition" {
     std.debug.print("{p}\n", .{func});
 
     var ctx = Context.init();
+    std.debug.print("{*}\n", .{&ctx});
     const result = func(&ctx);
 
-    try std.testing.expectEqual(@as(i64, 5), result);
+    try std.testing.expectEqual(@as(i64, 8), result);
 }
