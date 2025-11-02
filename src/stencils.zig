@@ -15,15 +15,13 @@ pub const Context = struct {
 
 pub export fn push_const_stencil(ctx: *Context) callconv(.c) void {
     @setRuntimeSafety(false);
-    const ptr = &compiler.hole_slot;
-    const value: i64 = ptr.*;
+    const value: i64 = 0x123456780ABCDEF0; // 16 bits
     ctx.stack[ctx.sp] = value;
     ctx.sp += 1;
 }
 
 pub export fn add_stencil(ctx: *Context) callconv(.c) void {
     @setRuntimeSafety(false);
-
     ctx.sp -= 1;
     const b = ctx.stack[ctx.sp];
     ctx.sp -= 1;

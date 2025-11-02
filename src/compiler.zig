@@ -10,8 +10,6 @@ const Executor = executor.Executor;
 const Expression = expression.Expression;
 const OpType = expression.OpType;
 
-pub export var hole_slot: i64 = 42;
-
 pub const CnPCompiler = struct {
     allocator: std.mem.Allocator,
     executor: Executor,
@@ -82,11 +80,41 @@ pub const CnPCompiler = struct {
 
     fn emitPushConst(self: *CnPCompiler, value: i64) !void {
         const stencil = try self.stencil_cache.get("push_const");
-        try self.executor.writeCode(stencil.code);
-        std.debug.print("hole slot pointer vlaue {p}", .{&hole_slot});
-        hole_slot = value; // patch value
+        std.debug.print("Before patch: ", .{});
+        stencil.print();
+    
+        var patched_code = try self.allocator.alloc(u8, stencil.code.len);
+        defer self.allocator.free(patched_code);
+        @memcpy(patched_code, stencil.code);
+    
+        // The value we want to insert
+        const bits: u64 = @bitCast(value);
+        
+        // Patch each 16-bit segment
+        patchArm64Immediate(patched_code[4..8], @intCast((bits >> 0) & 0xFFFF));
+        patchArm64Immediate(patched_code[8..12], @intCast((bits >> 16) & 0xFFFF));
+        patchArm64Immediate(patched_code[12..16], @intCast((bits >> 32) & 0xFFFF));
+        patchArm64Immediate(patched_code[16..20], @intCast((bits >> 48) & 0xFFFF));
+        
+        // Write the patched code to the executor
+        try self.executor.writeCode(patched_code);
+        
+        std.debug.print("After patch (value = {}): ", .{value});
+        std.debug.print("Bytes: ", .{});
+        for (patched_code) |b| {
+            std.debug.print("{X:0>2} ", .{b});
+        }
+        std.debug.print("\n", .{});
     }
-
+    
+    fn patchArm64Immediate(instruction: []u8, imm16: u16) void {
+        if (instruction.len < 4) return;
+        var current_instr = std.mem.readInt(u32, instruction[0..4], .little);
+        current_instr &= ~(@as(u32, 0xFFFF) << 5);
+        current_instr |= (@as(u32, imm16) << 5);
+        std.mem.writeInt(u32, instruction[0..4], current_instr, .little);
+    }
+    
     fn emitOperation(self: *CnPCompiler, name: []const u8) !void {
         const stencil = try self.stencil_cache.get(name);
         try self.executor.writeCode(stencil.code);
@@ -147,7 +175,7 @@ test "compile addition" {
     var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
     defer compiler.deinit();
 
-    const expr = try expression.Expression.parse(std.testing.allocator, "+");
+    const expr = try expression.Expression.parse(std.testing.allocator, "2 3 +");
     defer expr.deinit();
 
     const func = try compiler.compile(expr);
@@ -158,5 +186,5 @@ test "compile addition" {
     std.debug.print("{*}\n", .{&ctx});
     const result = func(&ctx);
 
-    try std.testing.expectEqual(@as(i64, 8), result);
+    try std.testing.expectEqual(@as(i64, 5), result);
 }
