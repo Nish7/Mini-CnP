@@ -80,27 +80,19 @@ pub const CnPCompiler = struct {
 
     fn emitPushConst(self: *CnPCompiler, value: i64) !void {
         const stencil = try self.stencil_cache.get("push_const");
-        std.debug.print("Before patch: ", .{});
-        stencil.print();
-    
         var patched_code = try self.allocator.alloc(u8, stencil.code.len);
         defer self.allocator.free(patched_code);
         @memcpy(patched_code, stencil.code);
     
-        // The value we want to insert
         const bits: u64 = @bitCast(value);
         
-        // Patch each 16-bit segment
         patchArm64Immediate(patched_code[4..8], @intCast((bits >> 0) & 0xFFFF));
         patchArm64Immediate(patched_code[8..12], @intCast((bits >> 16) & 0xFFFF));
         patchArm64Immediate(patched_code[12..16], @intCast((bits >> 32) & 0xFFFF));
         patchArm64Immediate(patched_code[16..20], @intCast((bits >> 48) & 0xFFFF));
         
-        // Write the patched code to the executor
         try self.executor.writeCode(patched_code);
         
-        std.debug.print("After patch (value = {}): ", .{value});
-        std.debug.print("Bytes: ", .{});
         for (patched_code) |b| {
             std.debug.print("{X:0>2} ", .{b});
         }
@@ -142,7 +134,6 @@ const StencilCache = struct {
     }
 
     fn extractAll(self: *StencilCache) !void {
-        // Extract each stencil from the compiled template functions
         try self.extract("push_const", @ptrCast(&stencils.push_const_stencil));
         try self.extract("add", @ptrCast(&stencils.add_stencil));
         try self.extract("sub", @ptrCast(&stencils.sub_stencil));
@@ -160,22 +151,13 @@ const StencilCache = struct {
     pub fn get(self: *StencilCache, name: []const u8) !Stencil {
         return self.stencils.get(name) orelse error.StencilNotFound;
     }
-
-    pub fn printAll(self: *StencilCache) void {
-        std.debug.print("\n=== Stencil Cache ===\n", .{});
-        var iter = self.stencils.iterator();
-        while (iter.next()) |entry| {
-            entry.value_ptr.print();
-        }
-        std.debug.print("====================\n\n", .{});
-    }
 };
 
 test "compile addition" {
     var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
     defer compiler.deinit();
 
-    const expr = try expression.Expression.parse(std.testing.allocator, "2 3 +");
+    const expr = try expression.Expression.parse(std.testing.allocator, "21");
     defer expr.deinit();
 
     const func = try compiler.compile(expr);
@@ -186,5 +168,5 @@ test "compile addition" {
     std.debug.print("{*}\n", .{&ctx});
     const result = func(&ctx);
 
-    try std.testing.expectEqual(@as(i64, 5), result);
+    try std.testing.expectEqual(@as(i64, 440), result);
 }

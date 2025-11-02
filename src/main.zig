@@ -1,9 +1,9 @@
 const std = @import("std");
 const compiler = @import("compiler.zig");
 const expression = @import("expression.zig");
-const stack_stencils = @import("stack_stencils.zig");
+const stencils = @import("stencils.zig");
 
-const Context = stack_stencils.Context;
+const Context = stencils.Context;
 const CnPCompiler = compiler.CnPCompiler;
 const Expression = expression.Expression;
 
