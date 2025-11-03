@@ -2,7 +2,11 @@
 > Copy and Patch Implementation in Zig
 
 ## Run Test
-`zig test src/compiler.zig`
+
+It runs `5 3 8 * 2 / + 4 6 * -1` = `-7` 
+
+`zig test src/compiler.zig -O ReleaseFast`
+
 
 ## Disassembly Notes:
 - `zig build-obj stencils.zig -O ReleaseFast -target aarch64-macos`

@@ -83,22 +83,22 @@ pub const CnPCompiler = struct {
         var patched_code = try self.allocator.alloc(u8, stencil.code.len);
         defer self.allocator.free(patched_code);
         @memcpy(patched_code, stencil.code);
-    
+
         const bits: u64 = @bitCast(value);
-        
+
         patchArm64Immediate(patched_code[4..8], @intCast((bits >> 0) & 0xFFFF));
         patchArm64Immediate(patched_code[8..12], @intCast((bits >> 16) & 0xFFFF));
         patchArm64Immediate(patched_code[12..16], @intCast((bits >> 32) & 0xFFFF));
         patchArm64Immediate(patched_code[16..20], @intCast((bits >> 48) & 0xFFFF));
-        
+
         try self.executor.writeCode(patched_code);
-        
+
         for (patched_code) |b| {
             std.debug.print("{X:0>2} ", .{b});
         }
         std.debug.print("\n", .{});
     }
-    
+
     fn patchArm64Immediate(instruction: []u8, imm16: u16) void {
         if (instruction.len < 4) return;
         var current_instr = std.mem.readInt(u32, instruction[0..4], .little);
@@ -106,7 +106,7 @@ pub const CnPCompiler = struct {
         current_instr |= (@as(u32, imm16) << 5);
         std.mem.writeInt(u32, instruction[0..4], current_instr, .little);
     }
-    
+
     fn emitOperation(self: *CnPCompiler, name: []const u8) !void {
         const stencil = try self.stencil_cache.get(name);
         try self.executor.writeCode(stencil.code);
@@ -157,7 +157,7 @@ test "compile addition" {
     var compiler = try CnPCompiler.init(std.testing.allocator, 4096);
     defer compiler.deinit();
 
-    const expr = try expression.Expression.parse(std.testing.allocator, "21");
+    const expr = try expression.Expression.parse(std.testing.allocator, "5 3 8 * 2 / + 4 6 * -");
     defer expr.deinit();
 
     const func = try compiler.compile(expr);
@@ -168,5 +168,5 @@ test "compile addition" {
     std.debug.print("{*}\n", .{&ctx});
     const result = func(&ctx);
 
-    try std.testing.expectEqual(@as(i64, 440), result);
+    try std.testing.expectEqual(@as(i64, -7), result);
 }
